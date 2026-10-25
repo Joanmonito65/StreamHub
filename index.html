@@ -976,25 +976,33 @@
       const iconWrap = document.createElement("div");
       iconWrap.className = "icon-wrap";
       iconWrap.setAttribute("aria-hidden", "true");
-      const img = document.createElement("img");
-      img.alt = "";
-      img.loading = "lazy";
-      img.src = site.icon || faviconFor(site.url);
-      img.onerror = () => {
-        // If a custom icon cannot load, retry using the website's favicon.
-        const fallbackUrl = faviconFor(site.url);
-        if (img.dataset.triedFallback !== "true" && fallbackUrl && img.src !== fallbackUrl) {
-          img.dataset.triedFallback = "true";
-          img.src = fallbackUrl;
-          return;
-        }
-        iconWrap.replaceChildren();
-        const fallback = document.createElement("span");
-        fallback.className = "fallback";
-        fallback.textContent = (getWebsiteDisplayName(site).trim()[0] || "?").toUpperCase();
-        iconWrap.appendChild(fallback);
-      };
-      iconWrap.appendChild(img);
+      if (site.icon && !iconIsImage(site.icon)) {
+        const emoji = document.createElement("span");
+        emoji.className = "fallback";
+        emoji.textContent = site.icon;
+        emoji.style.fontSize = "4.2rem";
+        emoji.style.fontWeight = "400";
+        iconWrap.appendChild(emoji);
+      } else {
+        const img = document.createElement("img");
+        img.alt = "";
+        img.loading = "lazy";
+        img.src = site.icon || faviconFor(site.url);
+        img.onerror = () => {
+          const fallbackUrl = faviconFor(site.url);
+          if (img.dataset.triedFallback !== "true" && fallbackUrl && img.src !== fallbackUrl) {
+            img.dataset.triedFallback = "true";
+            img.src = fallbackUrl;
+            return;
+          }
+          iconWrap.replaceChildren();
+          const fallback = document.createElement("span");
+          fallback.className = "fallback";
+          fallback.textContent = (getWebsiteDisplayName(site).trim()[0] || "?").toUpperCase();
+          iconWrap.appendChild(fallback);
+        };
+        iconWrap.appendChild(img);
+      }
 
       const title = document.createElement("h3");
       title.textContent = getWebsiteDisplayName(site);
@@ -1249,7 +1257,7 @@
       openModal("Add Website", "Add a website card to “" + ((section.name || "").trim() || "Untitled Section") + "”. The URL is required.", `
         <div class="form-field"><label for="websiteName">Name of website (optional)</label><input id="websiteName" name="websiteName" type="text" maxlength="120" placeholder="Example: YouTube"><small>Leave blank to show the website's domain on the card. The opened tab will use the website's own title.</small></div>
         <div class="form-field"><label for="websiteUrl">URL <span aria-hidden="true">*</span></label><input id="websiteUrl" name="websiteUrl" type="url" required placeholder="https://example.com"></div>
-        <div class="form-field"><label for="websiteIconUrl">Icon URL (optional)</label><input id="websiteIconUrl" name="websiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>If left blank, StreamHub will try to use the website's favicon.</small></div>
+        <div class="form-field"><label for="websiteEmoji">Emoji icon (optional)</label><input id="websiteEmoji" type="text" maxlength="12" placeholder="🎬"><small>Enter an emoji to use it as the card icon instead of an image. If provided, it takes priority over the icon URL or uploaded file.</small></div>\n        <div class="form-field"><label for="websiteIconUrl">Icon URL (optional)</label><input id="websiteIconUrl" name="websiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>If left blank, StreamHub will try to use the website's favicon.</small></div>
         <div class="form-field"><label for="websiteIconFile">Or choose an icon from your files</label><input id="websiteIconFile" name="websiteIconFile" type="file" accept="image/*"><small>For best results, use a square image. Uploaded images are saved in this browser.</small></div>
         <div class="form-field"><label for="websiteDescription">Description (optional)</label><textarea id="websiteDescription" rows="3" maxlength="400" placeholder="What can you watch or do on this site?"></textarea></div>
       `, "Add Website", async () => {
@@ -1262,6 +1270,8 @@
         }
         const file = document.getElementById("websiteIconFile").files[0];
         if (file) icon = await fileToSmallDataUrl(file);
+        const emoji = document.getElementById("websiteEmoji").value.trim();
+        if (emoji) icon = emoji;
         const currentSection = findSection(sectionId);
         if (!currentSection) throw new Error("That section no longer exists.");
         currentSection.websites.push({ id: makeId("website"), name, url, icon, description: document.getElementById("websiteDescription").value.trim() });
@@ -1277,7 +1287,7 @@
       openModal("Edit Website", "Change this website's name, URL, icon, and description. The URL is required.", `
         <div class="form-field"><label for="editWebsiteName">Name of website (optional)</label><input id="editWebsiteName" type="text" maxlength="120" placeholder="Leave blank to show the domain"></div>
         <div class="form-field"><label for="editWebsiteUrl">URL <span aria-hidden="true">*</span></label><input id="editWebsiteUrl" type="url" required placeholder="https://example.com"></div>
-        <div class="form-field"><label for="editWebsiteIconUrl">Icon URL (optional)</label><input id="editWebsiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>Use a direct image link. Leave blank to use the website favicon, except an existing uploaded icon is kept unless you select the checkbox below.</small></div>
+        <div class="form-field"><label for="editWebsiteEmoji">Emoji icon (optional)</label><input id="editWebsiteEmoji" type="text" maxlength="12" placeholder="🎬"><small>Enter an emoji to replace the current icon. If provided, it takes priority over the image URL or uploaded file.</small></div>\n        <div class="form-field"><label for="editWebsiteIconUrl">Icon URL (optional)</label><input id="editWebsiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>Use a direct image link. Leave blank to use the website favicon, except an existing uploaded icon is kept unless you select the checkbox below.</small></div>
         <div class="form-field"><label for="editWebsiteIconFile">Or choose a new icon from your files</label><input id="editWebsiteIconFile" type="file" accept="image/*"></div>
         <div class="form-field"><label><input id="editWebsiteUseFavicon" type="checkbox" style="width:auto; margin-right:8px;">Use the website favicon instead of the custom icon</label></div>
         <div class="form-field"><label for="editWebsiteDescription">Description (optional)</label><textarea id="editWebsiteDescription" rows="3" maxlength="400" placeholder="What can you watch or do on this site?"></textarea></div>
@@ -1305,6 +1315,8 @@
         } else if (!iconIsUploadedFile) {
           icon = "";
         }
+        const emoji = document.getElementById("editWebsiteEmoji").value.trim();
+        if (emoji) icon = emoji;
         current.name = name;
         current.url = url;
         current.icon = icon;
@@ -1314,6 +1326,7 @@
       document.getElementById("editWebsiteName").value = site.name || "";
       document.getElementById("editWebsiteUrl").value = site.url || "";
       document.getElementById("editWebsiteIconUrl").value = iconUrlValue;
+      document.getElementById("editWebsiteEmoji").value = site.icon && !iconIsImage(site.icon) ? site.icon : "";
       document.getElementById("editWebsiteDescription").value = site.description || "";
     }
 
