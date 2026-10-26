@@ -291,9 +291,14 @@
     }
     .add-card .icon-wrap { background: linear-gradient(145deg, #40346f, #203e70); }
     .add-plus { font-size: 3.5rem; font-weight: 300; color: #c4b5fd; line-height: 1; }
-    .card[draggable="true"] { cursor: grab; }
+    .card { position: relative; }
+    .card[draggable="true"] { cursor: grab; user-select: none; -webkit-user-drag: element; }
+    .card[draggable="true"]:active { cursor: grabbing; }
     .card.dragging { opacity: .42; cursor: grabbing; }
     .card.drag-over { outline: 2px dashed #c4b5fd; outline-offset: 3px; }
+    .drag-grip { position: absolute; top: 7px; right: 11px; z-index: 1; color: #aab5d0; font-size: 1.2rem; line-height: 1; opacity: .78; pointer-events: none; }
+    .card:hover .drag-grip { color: #ddd6fe; opacity: 1; }
+    .website-emoji { line-height: 1.15; }
     .section-heading h2 { cursor: context-menu; width: fit-content; max-width: 100%; margin-left: auto; margin-right: auto; }
     .section-heading h2:focus-visible { outline: 2px solid #a78bfa; outline-offset: 5px; border-radius: 4px; }
     .section-icon img { width: 100%; height: 100%; object-fit: contain; border-radius: inherit; }
@@ -446,7 +451,7 @@
     <div class="bottom-actions">
       <button id="addSectionButton" class="primary-button" type="button">＋ Add Section</button>
     </div>
-    <p class="hint">Right-click a website card or section title for more options. Drag website cards to reorder them and drag section headers to reorder sections.</p>
+    <p class="hint">Drag website cards to reorder them, or right-click a card to Move Up, Move Down, duplicate, edit, or move it to another section. Drag section headers to reorder sections. Clear search before rearranging.</p>
   </main>
 
   <footer>
@@ -844,7 +849,7 @@
     }
 
     function buildDefaultSections() {
-      const convert = (items, prefix) => items.map((item, index) => ({ id: makeId(prefix + index), name: item.name || "", url: item.url || "", icon: item.icon || "", description: item.description || "" }));
+      const convert = (items, prefix) => items.map((item, index) => ({ id: makeId(prefix + index), name: item.name || "", url: item.url || "", icon: item.icon || "", emoji: "", description: item.description || "" }));
       return [
         { id: "movies", name: "Movie & TV Streaming Websites", icon: "🎬", description: "Find your favorite movies, shows, anime, and dramas.", websites: convert(platforms, "movie") },
         { id: "sports", name: "Sport Streaming Websites", icon: "🏆", description: "Explore sports platforms for live matches, highlights, replays, and sports coverage.", websites: convert(sportsPlatforms, "sport") },
@@ -854,20 +859,46 @@
 
     function normaliseSections(value) {
       if (!Array.isArray(value)) throw new Error("The imported save does not contain a valid sections list.");
+      const defaultSites = [...platforms, ...sportsPlatforms, ...gamesPlatforms];
+      const comparableUrl = raw => {
+        try { return normaliseWebsiteUrl(raw); }
+        catch (_) { return String(raw || "").trim(); }
+      };
       return value.map(section => ({
         id: String(section.id || makeId("section")), name: String(section.name || "Untitled Section"),
         icon: typeof section.icon === "string" ? section.icon : "", description: String(section.description || ""),
-        websites: Array.isArray(section.websites) ? section.websites.map(site => ({
-          id: String(site.id || makeId("website")), name: String(site.name || ""), url: normaliseWebsiteUrl(site.url),
-          icon: typeof site.icon === "string" ? site.icon : "", description: String(site.description || "")
-        })) : []
+        websites: Array.isArray(section.websites) ? section.websites.map(site => {
+          const rawIcon = typeof site.icon === "string" ? site.icon : "";
+          const explicitEmoji = typeof site.emoji === "string" ? site.emoji : "";
+          // Older versions used one `icon` field for both emoji and image URLs.
+          // Move legacy emoji values into `emoji` and, for unchanged default sites,
+          // restore the original bundled logo URL when we can identify it by website URL.
+          const legacyEmoji = !explicitEmoji && rawIcon && !iconIsImage(rawIcon) ? rawIcon : "";
+          let imageIcon = iconIsImage(rawIcon) ? rawIcon : "";
+          if (legacyEmoji) {
+            const defaultMatch = defaultSites.find(item => comparableUrl(item.url) === comparableUrl(site.url));
+            imageIcon = defaultMatch && defaultMatch.icon ? defaultMatch.icon : "";
+          }
+          return {
+            id: String(site.id || makeId("website")), name: String(site.name || ""), url: normaliseWebsiteUrl(site.url),
+            icon: imageIcon, emoji: explicitEmoji || legacyEmoji, description: String(site.description || "")
+          };
+        }) : []
       }));
     }
 
     function loadSaveStore() {
       try {
         const data = JSON.parse(localStorage.getItem(SAVES_KEY) || "null");
-        if (data && Array.isArray(data.saves) && data.saves.length) return data;
+        if (data && Array.isArray(data.saves) && data.saves.length) {
+          data.saves = data.saves.map(save => ({
+            id: String(save.id || makeId("save")),
+            name: String(save.name || "Main Save"),
+            sections: normaliseSections(save.sections)
+          }));
+          if (!data.saves.some(save => save.id === data.activeSaveId)) data.activeSaveId = data.saves[0].id;
+          return data;
+        }
       } catch (error) { console.warn("Could not load save profiles.", error); }
       let initialSections;
       try { const legacy = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null"); initialSections = Array.isArray(legacy) ? normaliseSections(legacy) : buildDefaultSections(); }
@@ -971,15 +1002,15 @@
       link.dataset.websiteId = site.id;
       link.dataset.sectionId = section.id;
       link.setAttribute("aria-label", "Open " + getWebsiteDisplayName(site) + " in a new tab. Right-click for options.");
-      if (!link.draggable) link.title = "Clear search to drag and reorder website cards.";
+      link.title = link.draggable ? "Drag to reorder. Right-click for more actions." : "Clear search to drag and reorder website cards.";
 
       const iconWrap = document.createElement("div");
       iconWrap.className = "icon-wrap";
       iconWrap.setAttribute("aria-hidden", "true");
-      if (site.icon && !iconIsImage(site.icon)) {
+      if (site.emoji) {
         const emoji = document.createElement("span");
-        emoji.className = "fallback";
-        emoji.textContent = site.icon;
+        emoji.className = "fallback website-emoji";
+        emoji.textContent = site.emoji;
         emoji.style.fontSize = "4.2rem";
         emoji.style.fontWeight = "400";
         iconWrap.appendChild(emoji);
@@ -987,6 +1018,7 @@
         const img = document.createElement("img");
         img.alt = "";
         img.loading = "lazy";
+        img.draggable = false;
         img.src = site.icon || faviconFor(site.url);
         img.onerror = () => {
           const fallbackUrl = faviconFor(site.url);
@@ -1009,14 +1041,24 @@
       const description = document.createElement("p");
       description.textContent = site.description || "";
       link.append(iconWrap, title, description);
+      if (link.draggable) {
+        const grip = document.createElement("span");
+        grip.className = "drag-grip";
+        grip.textContent = "⠿";
+        grip.setAttribute("aria-hidden", "true");
+        link.appendChild(grip);
+      }
 
       link.addEventListener("contextmenu", event => {
         event.preventDefault();
         event.stopPropagation();
         showContextMenu(event.clientX, event.clientY, [
+          { label: "↑ Move Up", action: () => moveWebsiteByOffset(section.id, site.id, -1) },
+          { label: "↓ Move Down", action: () => moveWebsiteByOffset(section.id, site.id, 1) },
           { label: "Edit", action: () => openEditWebsiteModal(section.id, site.id) },
           { label: "Rename", action: () => openRenameWebsiteModal(section.id, site.id) },
           { label: "Change Section", action: () => openMoveWebsiteModal(section.id, site.id) },
+          { label: "Duplicate", action: () => duplicateWebsite(section.id, site.id) },
           { label: "Delete", danger: true, action: () => openConfirmModal(
             "Delete website?",
             "Are you sure you want to delete “" + getWebsiteDisplayName(site) + "”? This cannot be undone.",
@@ -1031,12 +1073,12 @@
       });
 
       link.addEventListener("dragstart", event => {
-        if (search.value.trim()) { event.preventDefault(); return; }
+        if (!link.draggable || search.value.trim()) { event.preventDefault(); return; }
         draggedCard = { sectionId: section.id, websiteId: site.id };
         link.classList.add("dragging");
         if (event.dataTransfer) {
           event.dataTransfer.effectAllowed = "move";
-          event.dataTransfer.setData("text/plain", site.id);
+          event.dataTransfer.setData("text/plain", "streamhub-website:" + site.id);
         }
       });
       link.addEventListener("dragend", () => {
@@ -1049,13 +1091,17 @@
         link.classList.add("drag-over");
         if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
       });
-      link.addEventListener("dragleave", () => link.classList.remove("drag-over"));
+      link.addEventListener("dragleave", event => {
+        if (!link.contains(event.relatedTarget)) link.classList.remove("drag-over");
+      });
       link.addEventListener("drop", event => {
         if (!draggedCard || draggedCard.sectionId !== section.id || search.value.trim()) return;
         event.preventDefault();
         event.stopPropagation();
         link.classList.remove("drag-over");
-        reorderWebsite(section.id, draggedCard.websiteId, site.id);
+        const rect = link.getBoundingClientRect();
+        const after = event.clientY > rect.top + rect.height / 2;
+        reorderWebsite(section.id, draggedCard.websiteId, site.id, after ? "after" : "before");
       });
       return link;
     }
@@ -1158,7 +1204,10 @@
         });
         sectionEl.append(heading, grid);
         sectionEl.addEventListener("dragstart", event => {
-          if (search.value.trim() || event.target.closest(".card")) { event.preventDefault(); return; }
+          // Card dragstart events bubble through the section. Let the card own those events;
+          // cancelling them here prevents website cards from ever being dragged.
+          if (event.target.closest(".card")) return;
+          if (search.value.trim()) { event.preventDefault(); return; }
           draggedSectionId = section.id; sectionEl.classList.add("section-dragging");
           if (event.dataTransfer) { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", "section:" + section.id); }
         });
@@ -1184,16 +1233,44 @@
       });
     }
 
-    function reorderWebsite(sectionId, movingId, beforeId) {
+    function reorderWebsite(sectionId, movingId, targetId, position = "before") {
       const section = findSection(sectionId);
       if (!section) return;
       const from = section.websites.findIndex(site => site.id === movingId);
       if (from < 0) return;
       const [moving] = section.websites.splice(from, 1);
-      let to = beforeId ? section.websites.findIndex(site => site.id === beforeId) : section.websites.length;
+      let to = targetId ? section.websites.findIndex(site => site.id === targetId) : section.websites.length;
       if (to < 0) to = section.websites.length;
-      section.websites.splice(to, 0, moving);
+      if (targetId && position === "after") to += 1;
+      section.websites.splice(Math.min(to, section.websites.length), 0, moving);
       draggedCard = null;
+      saveSections();
+      renderSections();
+    }
+
+    function moveWebsiteByOffset(sectionId, websiteId, offset) {
+      const section = findSection(sectionId);
+      if (!section) return;
+      const from = section.websites.findIndex(site => site.id === websiteId);
+      const to = from + offset;
+      if (from < 0 || to < 0 || to >= section.websites.length) return;
+      const [moving] = section.websites.splice(from, 1);
+      section.websites.splice(to, 0, moving);
+      saveSections();
+      renderSections();
+    }
+
+    function duplicateWebsite(sectionId, websiteId) {
+      const section = findSection(sectionId);
+      const site = findWebsite(sectionId, websiteId);
+      if (!section || !site) return;
+      const copy = {
+        ...site,
+        id: makeId("website"),
+        name: (site.name || getWebsiteDisplayName(site)) + " (Copy)"
+      };
+      const index = section.websites.findIndex(item => item.id === websiteId);
+      section.websites.splice(index + 1, 0, copy);
       saveSections();
       renderSections();
     }
@@ -1257,7 +1334,7 @@
       openModal("Add Website", "Add a website card to “" + ((section.name || "").trim() || "Untitled Section") + "”. The URL is required.", `
         <div class="form-field"><label for="websiteName">Name of website (optional)</label><input id="websiteName" name="websiteName" type="text" maxlength="120" placeholder="Example: YouTube"><small>Leave blank to show the website's domain on the card. The opened tab will use the website's own title.</small></div>
         <div class="form-field"><label for="websiteUrl">URL <span aria-hidden="true">*</span></label><input id="websiteUrl" name="websiteUrl" type="url" required placeholder="https://example.com"></div>
-        <div class="form-field"><label for="websiteEmoji">Emoji icon (optional)</label><input id="websiteEmoji" type="text" maxlength="12" placeholder="🎬"><small>Enter an emoji to use it as the card icon instead of an image. If provided, it takes priority over the icon URL or uploaded file.</small></div>\n        <div class="form-field"><label for="websiteIconUrl">Icon URL (optional)</label><input id="websiteIconUrl" name="websiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>If left blank, StreamHub will try to use the website's favicon.</small></div>
+        <div class="form-field"><label for="websiteEmoji">Emoji icon (optional)</label><input id="websiteEmoji" type="text" maxlength="12" placeholder="🎬"><small>The emoji is displayed on the card when set. Your icon URL or uploaded image is saved separately, so you can switch between them without losing either.</small></div>\n        <div class="form-field"><label for="websiteIconUrl">Icon URL (optional)</label><input id="websiteIconUrl" name="websiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>If left blank, StreamHub will try to use the website's favicon.</small></div>
         <div class="form-field"><label for="websiteIconFile">Or choose an icon from your files</label><input id="websiteIconFile" name="websiteIconFile" type="file" accept="image/*"><small>For best results, use a square image. Uploaded images are saved in this browser.</small></div>
         <div class="form-field"><label for="websiteDescription">Description (optional)</label><textarea id="websiteDescription" rows="3" maxlength="400" placeholder="What can you watch or do on this site?"></textarea></div>
       `, "Add Website", async () => {
@@ -1271,10 +1348,9 @@
         const file = document.getElementById("websiteIconFile").files[0];
         if (file) icon = await fileToSmallDataUrl(file);
         const emoji = document.getElementById("websiteEmoji").value.trim();
-        if (emoji) icon = emoji;
         const currentSection = findSection(sectionId);
         if (!currentSection) throw new Error("That section no longer exists.");
-        currentSection.websites.push({ id: makeId("website"), name, url, icon, description: document.getElementById("websiteDescription").value.trim() });
+        currentSection.websites.push({ id: makeId("website"), name, url, icon, emoji, description: document.getElementById("websiteDescription").value.trim() });
         saveSections(); renderSections(); closeModal();
       });
     }
@@ -1283,11 +1359,11 @@
       const site = findWebsite(sectionId, websiteId);
       if (!site) return;
       const iconIsUploadedFile = typeof site.icon === "string" && site.icon.startsWith("data:image/");
-      const iconUrlValue = iconIsUploadedFile ? "" : (site.icon || "");
+      const iconUrlValue = iconIsUploadedFile || (site.icon && !iconIsImage(site.icon)) ? "" : (site.icon || "");
       openModal("Edit Website", "Change this website's name, URL, icon, and description. The URL is required.", `
         <div class="form-field"><label for="editWebsiteName">Name of website (optional)</label><input id="editWebsiteName" type="text" maxlength="120" placeholder="Leave blank to show the domain"></div>
         <div class="form-field"><label for="editWebsiteUrl">URL <span aria-hidden="true">*</span></label><input id="editWebsiteUrl" type="url" required placeholder="https://example.com"></div>
-        <div class="form-field"><label for="editWebsiteEmoji">Emoji icon (optional)</label><input id="editWebsiteEmoji" type="text" maxlength="12" placeholder="🎬"><small>Enter an emoji to replace the current icon. If provided, it takes priority over the image URL or uploaded file.</small></div>\n        <div class="form-field"><label for="editWebsiteIconUrl">Icon URL (optional)</label><input id="editWebsiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>Use a direct image link. Leave blank to use the website favicon, except an existing uploaded icon is kept unless you select the checkbox below.</small></div>
+        <div class="form-field"><label for="editWebsiteEmoji">Emoji icon (optional)</label><input id="editWebsiteEmoji" type="text" maxlength="12" placeholder="🎬"><small>The emoji is displayed when set, while the logo URL/upload is retained separately for easy switching.</small></div>\n        <div class="form-field"><label for="editWebsiteIconUrl">Icon URL (optional)</label><input id="editWebsiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>Use a direct image link. Leave blank to use the website favicon, except an existing uploaded icon is kept unless you select the checkbox below.</small></div>
         <div class="form-field"><label for="editWebsiteIconFile">Or choose a new icon from your files</label><input id="editWebsiteIconFile" type="file" accept="image/*"></div>
         <div class="form-field"><label><input id="editWebsiteUseFavicon" type="checkbox" style="width:auto; margin-right:8px;">Use the website favicon instead of the custom icon</label></div>
         <div class="form-field"><label for="editWebsiteDescription">Description (optional)</label><textarea id="editWebsiteDescription" rows="3" maxlength="400" placeholder="What can you watch or do on this site?"></textarea></div>
@@ -1315,18 +1391,19 @@
         } else if (!iconIsUploadedFile) {
           icon = "";
         }
-        const emoji = document.getElementById("editWebsiteEmoji").value.trim();
-        if (emoji) icon = emoji;
+        // Choosing the favicon means neither a custom emoji nor a custom image should override it.
+        const emoji = useFavicon ? "" : document.getElementById("editWebsiteEmoji").value.trim();
         current.name = name;
         current.url = url;
         current.icon = icon;
+        current.emoji = emoji;
         current.description = document.getElementById("editWebsiteDescription").value.trim();
         saveSections(); renderSections(); closeModal();
       });
       document.getElementById("editWebsiteName").value = site.name || "";
       document.getElementById("editWebsiteUrl").value = site.url || "";
       document.getElementById("editWebsiteIconUrl").value = iconUrlValue;
-      document.getElementById("editWebsiteEmoji").value = site.icon && !iconIsImage(site.icon) ? site.icon : "";
+      document.getElementById("editWebsiteEmoji").value = site.emoji || (site.icon && !iconIsImage(site.icon) ? site.icon : "");
       document.getElementById("editWebsiteDescription").value = site.description || "";
     }
 
