@@ -405,10 +405,21 @@
     .settings-group h3 { margin: 0 0 7px; font-size: 1.05rem; }
     .settings-group > p { margin: 0 0 15px; color: var(--muted); font-size: .92rem; line-height: 1.5; }
     .settings-label { display: block; margin-bottom: 8px; color: #e4e9fa; font-size: .9rem; font-weight: 700; }
-    #saveSelector {
+    #saveSelector, #defaultSaveSelector {
       display: block; width: 100%; max-width: none; padding: 12px 13px; margin-bottom: 13px;
       border: 1px solid #3b4967; border-radius: 10px; background: #0a1121; color: white;
     }
+    .settings-toggle {
+      display: flex; align-items: flex-start; gap: 11px; margin-top: 15px;
+      color: #e4e9fa; cursor: pointer; line-height: 1.4;
+    }
+    .settings-toggle > input {
+      flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0;
+      accent-color: #8b5cf6; cursor: pointer;
+    }
+    .settings-toggle strong { display: block; font-size: .92rem; }
+    .settings-toggle small { display: block; margin-top: 4px; color: #9eabc7; font-size: .86rem; font-weight: 400; line-height: 1.45; }
+    .settings-help { margin: -4px 0 0; color: #9eabc7; font-size: .86rem; line-height: 1.45; }
     .settings-button-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .settings-button-grid button { width: 100%; }
     .settings-danger-group { border-color: #754057; }
@@ -445,13 +456,13 @@
 
   <main>
     <div class="toolbar">
-      <input id="search" type="search" placeholder="Search all platforms..." aria-label="Search all platforms">
+      <input id="search" type="search" placeholder="Search websites... (Ctrl+K)" aria-label="Search websites">
     </div>
     <div id="sectionsContainer" aria-live="polite"></div>
     <div class="bottom-actions">
       <button id="addSectionButton" class="primary-button" type="button">＋ Add Section</button>
     </div>
-    <p class="hint">Drag website cards to reorder them, or right-click a card to Move Up, Move Down, duplicate, edit, or move it to another section. Drag section headers to reorder sections. Clear search before rearranging.</p>
+    <p class="hint">Drag a website card to reorder it, or right-click it for more actions. Drag section headings to rearrange sections. Clear the search before reordering, or use the Move Up and Move Down commands.</p>
   </main>
 
   <footer>
@@ -463,7 +474,7 @@
       <div class="settings-panel-header">
         <div>
           <h2 id="settingsTitle">⚙ Settings</h2>
-          <p>Manage your StreamHub saves and transfer your layouts.</p>
+          <p>Choose how StreamHub starts, manage your layouts, and back up or restore your setup.</p>
         </div>
         <button id="settingsCloseButton" class="settings-close-button" type="button" aria-label="Close settings">×</button>
       </div>
@@ -471,8 +482,8 @@
       <div class="settings-panel-content">
         <section class="settings-group" aria-labelledby="settingsSavesHeading">
           <h3 id="settingsSavesHeading">Saved layouts</h3>
-          <p>Switch between separate sets of websites and sections.</p>
-          <label class="settings-label" for="saveSelector">Current save</label>
+          <p>Keep separate collections of websites for different interests or purposes.</p>
+          <label class="settings-label" for="saveSelector">Current layout</label>
           <select id="saveSelector" aria-label="Choose save"></select>
           <div class="settings-button-grid">
             <button id="newSaveButton" class="secondary-button" type="button">＋ New Save</button>
@@ -481,9 +492,25 @@
           </div>
         </section>
 
+        <section class="settings-group" aria-labelledby="settingsBehaviorHeading">
+          <h3 id="settingsBehaviorHeading">Startup &amp; behavior</h3>
+          <p>Choose which layout opens when you load StreamHub and how website links open.</p>
+          <label class="settings-label" for="defaultSaveSelector">Default save on startup</label>
+          <select id="defaultSaveSelector" aria-label="Choose which save opens when StreamHub loads"></select>
+          <p class="settings-help">“Last used save” remembers the layout you most recently selected. Choose a specific save to always open that layout instead.</p>
+          <label class="settings-toggle" for="openLinksInNewTabToggle">
+            <input id="openLinksInNewTabToggle" type="checkbox" checked>
+            <span><strong>Open websites in a new tab</strong><small>When disabled, website cards open in the current tab instead.</small></span>
+          </label>
+        </section>
+
         <section class="settings-group" aria-labelledby="settingsTransferHeading">
           <h3 id="settingsTransferHeading">Import &amp; export</h3>
-          <p>Back up your layout as JSON or import a saved backup.</p>
+          <p>Back up layouts to JSON, download a backup file, or restore a previous export.</p>
+          <label class="settings-toggle" for="importedSuffixToggle">
+            <input id="importedSuffixToggle" type="checkbox" checked>
+            <span><strong>Add “(Imported)” to imported save names</strong><small>Add a label so imported layouts are easy to distinguish. Turn this off to keep their original names.</small></span>
+          </label>
           <div class="settings-button-grid settings-transfer-buttons">
             <button id="exportButton" class="secondary-button" type="button">Export</button>
             <button id="importButton" class="secondary-button" type="button">Import</button>
@@ -491,8 +518,8 @@
         </section>
 
         <section class="settings-group settings-danger-group" aria-labelledby="settingsResetHeading">
-          <h3 id="settingsResetHeading">Reset all saves</h3>
-          <p>Delete every save and create one fresh default save. This cannot be undone unless you exported a backup.</p>
+          <h3 id="settingsResetHeading">Reset everything</h3>
+          <p>Remove every saved layout and restore StreamHub’s default layout and preference settings. Export a backup first if you may want to recover your setup.</p>
           <button id="resetEverythingButton" class="danger-button" type="button">Reset Everything</button>
         </section>
       </div>
@@ -833,6 +860,7 @@
     // =====================================================
     const STORAGE_KEY = "streamhub-dashboard-v2";
     const SAVES_KEY = "streamhub-saves-v1";
+    const PREFERENCES_KEY = "streamhub-preferences-v1";
     const search = document.getElementById("search");
     const sectionsContainer = document.getElementById("sectionsContainer");
     const modalOverlay = document.getElementById("modalOverlay");
@@ -846,6 +874,32 @@
 
     function makeId(prefix = "item") {
       return prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 9);
+    }
+
+    function defaultPreferences() {
+      return { defaultSaveId: "last-used", appendImportedSuffix: true, openLinksInNewTab: true };
+    }
+
+    function loadPreferences() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(PREFERENCES_KEY) || "null");
+        return { ...defaultPreferences(), ...(saved && typeof saved === "object" ? saved : {}) };
+      } catch (error) {
+        console.warn("Could not load StreamHub preferences.", error);
+        return defaultPreferences();
+      }
+    }
+
+    let preferences = loadPreferences();
+
+    function persistPreferences() {
+      try {
+        localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
+        return true;
+      } catch (error) {
+        console.warn("Unable to save StreamHub preferences:", error);
+        return false;
+      }
     }
 
     function buildDefaultSections() {
@@ -908,6 +962,10 @@
     }
     let saveStore = loadSaveStore();
     let activeSaveId = saveStore.activeSaveId || saveStore.saves[0].id;
+    if (preferences.defaultSaveId && preferences.defaultSaveId !== "last-used") {
+      if (saveStore.saves.some(save => save.id === preferences.defaultSaveId)) activeSaveId = preferences.defaultSaveId;
+      else preferences.defaultSaveId = "last-used";
+    }
     if (!saveStore.saves.some(save => save.id === activeSaveId)) activeSaveId = saveStore.saves[0].id;
     let sections = saveStore.saves.find(save => save.id === activeSaveId).sections;
     let draggedCard = null;
@@ -926,15 +984,60 @@
     function saveSections() { return persistSaveStore(); }
     function refreshSaveSelector() {
       const selector = document.getElementById("saveSelector");
-      if (!selector) return;
-      selector.replaceChildren();
-      saveStore.saves.forEach(save => { const option = document.createElement("option"); option.value = save.id; option.textContent = save.name; option.selected = save.id === activeSaveId; selector.appendChild(option); });
+      if (selector) {
+        selector.replaceChildren();
+        saveStore.saves.forEach(save => {
+          const option = document.createElement("option");
+          option.value = save.id; option.textContent = save.name; option.selected = save.id === activeSaveId;
+          selector.appendChild(option);
+        });
+      }
+      refreshSettingsControls();
     }
+
+    function refreshSettingsControls() {
+      const defaultSelector = document.getElementById("defaultSaveSelector");
+      if (defaultSelector) {
+        defaultSelector.replaceChildren();
+        const lastUsed = document.createElement("option");
+        lastUsed.value = "last-used";
+        lastUsed.textContent = "Last used save";
+        defaultSelector.appendChild(lastUsed);
+        saveStore.saves.forEach(save => {
+          const option = document.createElement("option");
+          option.value = save.id;
+          option.textContent = save.name;
+          defaultSelector.appendChild(option);
+        });
+        const validDefault = preferences.defaultSaveId === "last-used" || saveStore.saves.some(save => save.id === preferences.defaultSaveId);
+        defaultSelector.value = validDefault ? (preferences.defaultSaveId || "last-used") : "last-used";
+      }
+      const suffixToggle = document.getElementById("importedSuffixToggle");
+      if (suffixToggle) suffixToggle.checked = !!preferences.appendImportedSuffix;
+      const newTabToggle = document.getElementById("openLinksInNewTabToggle");
+      if (newTabToggle) newTabToggle.checked = !!preferences.openLinksInNewTab;
+    }
+
     function switchSave(id) {
       const next = saveStore.saves.find(save => save.id === id); if (!next) return;
-      persistSaveStore(); activeSaveId = id; sections = next.sections; search.value = ""; refreshSaveSelector(); renderSections();
+      const current = saveStore.saves.find(save => save.id === activeSaveId);
+      if (current) current.sections = sections;
+      activeSaveId = id;
+      sections = next.sections;
+      search.value = "";
+      persistSaveStore();
+      refreshSaveSelector();
+      renderSections();
     }
-    function saveEverythingExport() { return { format: "StreamHubExport", version: 1, exportedAt: new Date().toISOString(), activeSaveId, saves: saveStore.saves.map(save => ({ id: save.id, name: save.name, sections: save.sections })) }; }
+
+    function saveEverythingExport() {
+      return {
+        format: "StreamHubExport", version: 1, exportedAt: new Date().toISOString(), activeSaveId,
+        defaultSaveId: preferences.defaultSaveId,
+        preferences: { ...preferences },
+        saves: saveStore.saves.map(save => ({ id: save.id, name: save.name, sections: save.sections }))
+      };
+    }
 
     function findSection(sectionId) {
       return sections.find(section => section.id === sectionId);
@@ -996,8 +1099,8 @@
       const link = document.createElement("a");
       link.className = "card";
       link.href = site.url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
+      link.target = preferences.openLinksInNewTab ? "_blank" : "_self";
+      link.rel = preferences.openLinksInNewTab ? "noopener noreferrer" : "";
       link.draggable = search.value.trim() === "";
       link.dataset.websiteId = site.id;
       link.dataset.sectionId = section.id;
@@ -1331,8 +1434,8 @@
     function openAddWebsiteModal(sectionId) {
       const section = findSection(sectionId);
       if (!section) return;
-      openModal("Add Website", "Add a website card to “" + ((section.name || "").trim() || "Untitled Section") + "”. The URL is required.", `
-        <div class="form-field"><label for="websiteName">Name of website (optional)</label><input id="websiteName" name="websiteName" type="text" maxlength="120" placeholder="Example: YouTube"><small>Leave blank to show the website's domain on the card. The opened tab will use the website's own title.</small></div>
+      openModal("Add Website", "Add a shortcut to this section. The website address is required; the name, emoji, custom logo, and description are optional.", `
+        <div class="form-field"><label for="websiteName">Name of website (optional)</label><input id="websiteName" name="websiteName" type="text" maxlength="120" placeholder="Example: YouTube"><small>If you leave this blank, the card will display the website’s domain.</small></div>
         <div class="form-field"><label for="websiteUrl">URL <span aria-hidden="true">*</span></label><input id="websiteUrl" name="websiteUrl" type="url" required placeholder="https://example.com"></div>
         <div class="form-field"><label for="websiteEmoji">Emoji icon (optional)</label><input id="websiteEmoji" type="text" maxlength="12" placeholder="🎬"><small>The emoji is displayed on the card when set. Your icon URL or uploaded image is saved separately, so you can switch between them without losing either.</small></div>\n        <div class="form-field"><label for="websiteIconUrl">Icon URL (optional)</label><input id="websiteIconUrl" name="websiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>If left blank, StreamHub will try to use the website's favicon.</small></div>
         <div class="form-field"><label for="websiteIconFile">Or choose an icon from your files</label><input id="websiteIconFile" name="websiteIconFile" type="file" accept="image/*"><small>For best results, use a square image. Uploaded images are saved in this browser.</small></div>
@@ -1360,7 +1463,7 @@
       if (!site) return;
       const iconIsUploadedFile = typeof site.icon === "string" && site.icon.startsWith("data:image/");
       const iconUrlValue = iconIsUploadedFile || (site.icon && !iconIsImage(site.icon)) ? "" : (site.icon || "");
-      openModal("Edit Website", "Change this website's name, URL, icon, and description. The URL is required.", `
+      openModal("Edit Website", "Update the shortcut details. The website address is required. The emoji and custom logo are stored separately, so changing one will not erase the other.", `
         <div class="form-field"><label for="editWebsiteName">Name of website (optional)</label><input id="editWebsiteName" type="text" maxlength="120" placeholder="Leave blank to show the domain"></div>
         <div class="form-field"><label for="editWebsiteUrl">URL <span aria-hidden="true">*</span></label><input id="editWebsiteUrl" type="url" required placeholder="https://example.com"></div>
         <div class="form-field"><label for="editWebsiteEmoji">Emoji icon (optional)</label><input id="editWebsiteEmoji" type="text" maxlength="12" placeholder="🎬"><small>The emoji is displayed when set, while the logo URL/upload is retained separately for easy switching.</small></div>\n        <div class="form-field"><label for="editWebsiteIconUrl">Icon URL (optional)</label><input id="editWebsiteIconUrl" type="url" placeholder="https://example.com/icon.png"><small>Use a direct image link. Leave blank to use the website favicon, except an existing uploaded icon is kept unless you select the checkbox below.</small></div>
@@ -1410,7 +1513,7 @@
     function openRenameWebsiteModal(sectionId, websiteId) {
       const site = findWebsite(sectionId, websiteId);
       if (!site) return;
-      openModal("Rename Website", "Change the label shown on this card. Clear the name to show its domain instead.", `
+      openModal("Rename Website", "Change the name displayed on the card. Leave the name blank to show the website’s domain.", `
         <div class="form-field"><label for="renameWebsiteName">Name of website</label><input id="renameWebsiteName" type="text" maxlength="120" placeholder="Leave blank to use the domain"></div>
       `, "Save Name", () => {
         const current = findWebsite(sectionId, websiteId);
@@ -1425,7 +1528,7 @@
       const site = findWebsite(sectionId, websiteId);
       if (!site) return;
       const options = sections.map(section => `<option value="${escapeAttribute(section.id)}"${section.id === sectionId ? " selected" : ""}>${escapeHtml((section.name || "").trim() || "Untitled Section")}</option>`).join("");
-      openModal("Change Section", "Choose where this website card should appear.", `
+      openModal("Move Website to Another Section", "Select the section where you want this shortcut to appear. Its name, link, icon, and description will stay with it.", `
         <div class="form-field"><label for="moveWebsiteSection">Move to section</label><select id="moveWebsiteSection">${options}</select></div>
       `, "Move Website", () => {
         const targetId = document.getElementById("moveWebsiteSection").value;
@@ -1442,7 +1545,7 @@
     }
 
     function openAddSectionModal() {
-      openModal("Add Section", "Create a new category, such as Music Streaming Sites. Adding an icon is optional.", `
+      openModal("Add Section", "Create a new group of website shortcuts. You can add an emoji or image icon and a short description, or leave either one blank.", `
         <div class="form-field"><label for="newSectionName">Name of Section (optional)</label><input id="newSectionName" maxlength="120" placeholder="Music Streaming Sites"><small>If blank, the section will be called “Untitled Section”.</small></div>
         <div class="form-field"><label for="newSectionIcon">Emoji or Icon URL (optional)</label><input id="newSectionIcon" placeholder="🎵 or https://example.com/icon.png"><small>Leave blank for a clean heading with no icon.</small></div>
         <div class="form-field"><label for="newSectionIconFile">Or choose an icon from your files</label><input id="newSectionIconFile" type="file" accept="image/*"></div>
@@ -1467,7 +1570,7 @@
       if (!section) return;
       const iconIsUploadedFile = typeof section.icon === "string" && section.icon.startsWith("data:image/");
       const iconValue = iconIsUploadedFile ? "" : (section.icon || "");
-      openModal("Edit Section", "Change the section name, emoji or icon, and description.", `
+      openModal("Edit Section", "Update this group’s title, heading icon, or description. Leave the icon blank if you do not want one displayed.", `
         <div class="form-field"><label for="editSectionName">Name of Section</label><input id="editSectionName" maxlength="120" placeholder="Untitled Section"></div>
         <div class="form-field"><label for="editSectionIcon">Emoji or Icon URL</label><input id="editSectionIcon" placeholder="🎵 or https://example.com/icon.png"><small>Enter an emoji or a direct image link. Leave blank to remove the section icon, or select a new file.</small></div>
         <div class="form-field"><label for="editSectionIconFile">Or choose a new icon from your files</label><input id="editSectionIconFile" type="file" accept="image/*"></div>
@@ -1506,7 +1609,7 @@
     function openRenameSectionModal(sectionId) {
       const section = findSection(sectionId);
       if (!section) return;
-      openModal("Rename Section", "Enter the new name for this section.", `
+      openModal("Rename Section", "Change the heading shown above this group of websites.", `
         <div class="form-field"><label for="renameSectionName">Name of Section</label><input id="renameSectionName" maxlength="120" placeholder="Untitled Section"></div>
       `, "Save Name", () => {
         const current = findSection(sectionId);
@@ -1552,7 +1655,7 @@
     }
 
     function openTextModal(title, intro, initialText, submitLabel, handler) {
-      openModal(title, intro, `<div class="form-field"><label for="transferText">JSON text</label><textarea id="transferText" rows="12" spellcheck="false" style="font-family:monospace" placeholder="Paste or copy your StreamHub export here"></textarea></div>`, submitLabel, handler);
+      openModal(title, intro, `<div class="form-field"><label for="transferText">StreamHub backup (JSON)</label><textarea id="transferText" rows="12" spellcheck="false" style="font-family:monospace" placeholder="Paste the full StreamHub JSON backup here"></textarea></div>`, submitLabel, handler);
       document.getElementById("transferText").value = initialText || "";
       document.getElementById("transferText").focus();
       document.getElementById("transferText").select();
@@ -1576,9 +1679,54 @@
       if (event.target === settingsOverlay) closeSettings();
     });
 
+    function getImportedSaveName(rawName) {
+      const base = String(rawName || "Imported Save").trim() || "Imported Save";
+      if (!preferences.appendImportedSuffix || /\s*\(Imported\)$/i.test(base)) return base.slice(0, 80);
+      const suffix = " (Imported)";
+      return base.slice(0, 80 - suffix.length).trimEnd() + suffix;
+    }
+
+    function addJsonDownloadButton(jsonText, filename) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "secondary-button";
+      button.textContent = "Download .json";
+      button.setAttribute("aria-label", "Download StreamHub backup as a JSON file");
+      button.addEventListener("click", () => {
+        const blob = new Blob([jsonText], { type: "application/json;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+      // Keep Download beside the modal's Cancel/Done actions, not inside the JSON text.
+      const lastAction = modalActions.lastElementChild;
+      modalActions.insertBefore(button, lastAction || null);
+    }
+
     document.getElementById("saveSelector").addEventListener("change", event => switchSave(event.target.value));
+    document.getElementById("defaultSaveSelector").addEventListener("change", event => {
+      const selected = event.target.value;
+      preferences.defaultSaveId = selected === "last-used" || saveStore.saves.some(save => save.id === selected) ? selected : "last-used";
+      persistPreferences();
+      refreshSettingsControls();
+    });
+    document.getElementById("importedSuffixToggle").addEventListener("change", event => {
+      preferences.appendImportedSuffix = event.target.checked;
+      persistPreferences();
+    });
+    document.getElementById("openLinksInNewTabToggle").addEventListener("change", event => {
+      preferences.openLinksInNewTab = event.target.checked;
+      persistPreferences();
+      renderSections();
+    });
     document.getElementById("newSaveButton").addEventListener("click", () => {
-      openModal("Create Save", "Create a separate StreamHub layout. Start with defaults or copy your current save.", `<div class="form-field"><label for="saveNameInput">Save name</label><input id="saveNameInput" maxlength="80" required placeholder="My Anime Sites"></div><div class="form-field"><label for="saveStartMode">Starting layout</label><select id="saveStartMode"><option value="defaults">Default websites and sections</option><option value="copy">Copy current save</option><option value="blank">Empty layout</option></select></div>`, "Create Save", () => {
+      openModal("Create Save", "Make a separate collection of websites. Start with StreamHub’s default sections, duplicate your current layout, or begin with a blank page.", `<div class="form-field"><label for="saveNameInput">Save name</label><input id="saveNameInput" maxlength="80" required placeholder="My Anime Sites"></div><div class="form-field"><label for="saveStartMode">Starting layout</label><select id="saveStartMode"><option value="defaults">Default websites and sections</option><option value="copy">Copy current save</option><option value="blank">Empty layout</option></select></div>`, "Create Save", () => {
         const name = document.getElementById("saveNameInput").value.trim(); if (!name) throw new Error("Enter a save name.");
         const mode = document.getElementById("saveStartMode").value;
         const data = mode === "copy" ? JSON.parse(JSON.stringify(sections)) : mode === "blank" ? [] : buildDefaultSections();
@@ -1587,40 +1735,81 @@
     });
     document.getElementById("renameSaveButton").addEventListener("click", () => {
       const active = saveStore.saves.find(save => save.id === activeSaveId); if (!active) return;
-      openModal("Rename Save", "Change the name shown in the save selector.", `<div class="form-field"><label for="saveNameInput">Save name</label><input id="saveNameInput" maxlength="80" required></div>`, "Rename Save", () => { const name = document.getElementById("saveNameInput").value.trim(); if (!name) throw new Error("Enter a save name."); active.name = name; persistSaveStore(); refreshSaveSelector(); closeModal(); });
+      openModal("Rename Save", "Choose a clearer name for this layout. This changes only the save’s label, not its websites or sections.", `<div class="form-field"><label for="saveNameInput">Save name</label><input id="saveNameInput" maxlength="80" required></div>`, "Rename Save", () => { const name = document.getElementById("saveNameInput").value.trim(); if (!name) throw new Error("Enter a save name."); active.name = name; persistSaveStore(); refreshSaveSelector(); closeModal(); });
       document.getElementById("saveNameInput").value = active.name;
     });
     document.getElementById("deleteSaveButton").addEventListener("click", () => {
       if (saveStore.saves.length <= 1) { window.alert("You must keep at least one save. Use Reset Everything to restore the whole app."); return; }
-      openConfirmModal("Delete this save?", "This permanently deletes only the currently selected save and all its websites and sections.", "Delete Save", () => { saveStore.saves = saveStore.saves.filter(save => save.id !== activeSaveId); activeSaveId = saveStore.saves[0].id; sections = saveStore.saves[0].sections; persistSaveStore(); refreshSaveSelector(); renderSections(); });
+      openConfirmModal("Delete this save?", "Permanently remove this layout and all websites and sections inside it. Other saves will remain unchanged.", "Delete Save", () => {
+        const deletedId = activeSaveId;
+        saveStore.saves = saveStore.saves.filter(save => save.id !== deletedId);
+        activeSaveId = saveStore.saves[0].id;
+        sections = saveStore.saves[0].sections;
+        if (preferences.defaultSaveId === deletedId) preferences.defaultSaveId = "last-used";
+        persistPreferences();
+        persistSaveStore();
+        refreshSaveSelector();
+        renderSections();
+      });
     });
     document.getElementById("exportButton").addEventListener("click", () => {
-      openModal("Export StreamHub", "Choose whether to export just this save or every save. The JSON includes all sections, section order, websites, website order, icons, descriptions, and save names.", `<div class="form-field"><label for="exportScope">Export scope</label><select id="exportScope"><option value="current">Current save only</option><option value="all">Everything (all saves)</option></select></div>`, "Generate Export", () => {
+      openModal("Export StreamHub", "Choose whether to back up only the current layout or every layout. The export contains your website links, order, icons, descriptions, and section settings.", `<div class="form-field"><label for="exportScope">Export scope</label><select id="exportScope"><option value="current">Current save only</option><option value="all">Everything (all saves)</option></select></div>`, "Generate Export", () => {
         const scope = document.getElementById("exportScope").value;
         const data = scope === "all" ? saveEverythingExport() : { format:"StreamHubExport", version:1, exportedAt:new Date().toISOString(), save: { id:activeSaveId, name:(saveStore.saves.find(save=>save.id===activeSaveId)||{}).name || "Imported Save", sections } };
-        openTextModal("Your StreamHub Export", "Copy all the text below and keep it somewhere safe. Import it later to restore these settings.", JSON.stringify(data, null, 2), "Done", () => closeModal());
+        const jsonText = JSON.stringify(data, null, 2);
+        const exportName = scope === "all" ? "streamhub-all-saves.json" : ((saveStore.saves.find(save => save.id === activeSaveId)?.name || "streamhub-save").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "streamhub-save") + ".json";
+        openTextModal("Your StreamHub Backup", "Copy the JSON below or download it as a .json file. Keep the backup somewhere safe so you can restore it later.", jsonText, "Done", () => closeModal());
+        addJsonDownloadButton(jsonText, exportName);
       });
     });
     document.getElementById("importButton").addEventListener("click", () => {
-      openTextModal("Import StreamHub Settings", "Paste a StreamHub JSON export. Importing everything replaces all saves; importing one save adds it as a new save. Invalid data will be rejected.", "", "Import", () => {
+      openTextModal("Import a StreamHub Backup", "Paste the complete JSON text from a StreamHub export. A single-save backup is added as a new layout; an all-saves backup replaces your current collection. Invalid or incomplete data will be rejected.", "", "Import Backup", () => {
         let data; try { data = JSON.parse(document.getElementById("transferText").value); } catch (_) { throw new Error("That is not valid JSON. Paste the full export text."); }
         if (!data || data.format !== "StreamHubExport" || data.version !== 1) throw new Error("This does not look like a supported StreamHub export.");
         if (Array.isArray(data.saves)) {
-          if (!data.saves.length) throw new Error("The export contains no saves.");
-          const imported = data.saves.map(save => ({ id: makeId("save"), name: String(save.name || "Imported Save").slice(0,80), sections: normaliseSections(save.sections) }));
-          saveStore.saves = imported; activeSaveId = imported[0].id; sections = imported[0].sections;
+          if (!data.saves.length) throw new Error("This backup does not contain any saves.");
+          const oldToNewIds = new Map();
+          const imported = data.saves.map(save => {
+            const id = makeId("save");
+            if (save && save.id != null) oldToNewIds.set(String(save.id), id);
+            return { id, name: getImportedSaveName(save.name), sections: normaliseSections(save.sections) };
+          });
+          saveStore.saves = imported;
+          activeSaveId = oldToNewIds.get(String(data.activeSaveId || "")) || imported[0].id;
+          sections = saveStore.saves.find(save => save.id === activeSaveId).sections;
+          if (data.preferences && typeof data.preferences === "object") {
+            const incoming = data.preferences;
+            preferences = { ...defaultPreferences(), ...incoming };
+            if (incoming.defaultSaveId === "last-used") preferences.defaultSaveId = "last-used";
+            else preferences.defaultSaveId = oldToNewIds.get(String(incoming.defaultSaveId || data.defaultSaveId || "")) || "last-used";
+          } else if (!saveStore.saves.some(save => save.id === preferences.defaultSaveId)) {
+            preferences.defaultSaveId = "last-used";
+          }
         } else if (data.save && Array.isArray(data.save.sections)) {
-          const imported = { id: makeId("save"), name: (String(data.save.name || "Imported Save").slice(0,70) + " (Imported)").slice(0,80), sections: normaliseSections(data.save.sections) };
-          saveStore.saves.push(imported); activeSaveId = imported.id; sections = imported.sections;
-        } else throw new Error("The export has no save data to import.");
-        persistSaveStore(); refreshSaveSelector(); renderSections(); search.value = ""; closeModal();
+          const imported = {
+            id: makeId("save"),
+            name: getImportedSaveName(data.save.name),
+            sections: normaliseSections(data.save.sections)
+          };
+          saveStore.saves.push(imported);
+          activeSaveId = imported.id;
+          sections = imported.sections;
+        } else throw new Error("The backup does not contain a supported save or save collection.");
+        persistPreferences();
+        persistSaveStore();
+        refreshSaveSelector();
+        renderSections();
+        search.value = "";
+        closeModal();
       });
     });
     document.getElementById("resetEverythingButton").addEventListener("click", () => {
-      openConfirmModal("Reset Everything?", "This deletes ALL saves and restores StreamHub to one fresh default save. This cannot be undone unless you exported your settings first.", "Delete All Saves & Reset", () => {
+      openConfirmModal("Reset Everything?", "This removes every saved layout and restores StreamHub’s default layout and preferences, including your startup-save choice and import-name option. Export a backup first if you want to keep a copy.", "Delete All Saves & Reset", () => {
         const fresh = { id: makeId("save"), name:"Main Save", sections:buildDefaultSections() };
         saveStore = { activeSaveId:fresh.id, saves:[fresh] }; activeSaveId = fresh.id; sections = fresh.sections;
-        try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(SAVES_KEY); } catch (_) {}
+        preferences = defaultPreferences();
+        try { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(SAVES_KEY); localStorage.removeItem(PREFERENCES_KEY); } catch (_) {}
+        persistPreferences();
         persistSaveStore(); refreshSaveSelector(); search.value = ""; renderSections();
       });
     });
@@ -1628,9 +1817,9 @@
     document.getElementById("addSectionButton").addEventListener("click", openAddSectionModal);
     document.getElementById("resetDefaultsButton").addEventListener("click", () => {
       openConfirmModal(
-        "Reset to Default?",
-        "Are you sure you want to reset all settings? This will remove your added websites and sections and restore the original StreamHub layout.",
-        "Reset Everything",
+        "Restore Defaults for This Save?",
+        "Replace the selected save’s websites and sections with the original StreamHub layout. Your other saves and preference settings will remain unchanged.",
+        "Restore Defaults",
         () => {
           sections = buildDefaultSections();
           const active = saveStore.saves.find(save => save.id === activeSaveId); if (active) active.sections = sections;
@@ -1654,8 +1843,20 @@
     window.addEventListener("scroll", hideContextMenu, true);
 
     refreshSaveSelector();
+    persistPreferences();
     persistSaveStore();
     renderSections();
+
+    // Ctrl+K (or Cmd+K on macOS) quickly focuses the website search.
+    document.addEventListener("keydown", event => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      if (event.key.toLowerCase() !== "k" || !modalOverlay.hidden || !settingsOverlay.hidden) return;
+      const activeTag = document.activeElement && document.activeElement.tagName;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(activeTag) && document.activeElement !== search) return;
+      event.preventDefault();
+      search.focus();
+      search.select();
+    });
   </script>
 </body>
 </html>
