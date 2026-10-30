@@ -234,6 +234,20 @@
       padding: 0 16px 28px;
     }
 
+    .export-output-field textarea { min-height: 230px; resize: vertical; user-select: text; cursor: text; }
+    .manager-modal { width: min(760px, 100%); }
+    .manager-dashboard { display: grid; gap: 18px; }
+    .manager-group { padding: 15px; border: 1px solid #2e3d5b; border-radius: 15px; background: #0d1729; }
+    .manager-group h3 { margin: 0 0 12px; color: #dce4fb; font-size: .98rem; }
+    .manager-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .manager-action-tile { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 12px; text-align: left; color: var(--text); background: #17243b; border: 1px solid #354665; border-radius: 12px; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+    .manager-action-tile:hover, .manager-action-tile:focus-visible { background: #223353; border-color: #8b7bea; transform: translateY(-1px); outline: none; }
+    .manager-action-symbol { display: grid; place-items: center; flex: 0 0 36px; height: 36px; border-radius: 10px; background: #3a3470; color: #e4ddff; font-size: 1.15rem; }
+    .manager-action-copy { display: grid; gap: 3px; min-width: 0; }
+    .manager-action-copy strong { font-size: .9rem; }
+    .manager-action-copy small { color: #aab7d2; font-size: .78rem; line-height: 1.35; font-weight: 400; }
+    .manager-action-chevron { margin-left: auto; color: #9aa9c8; font-size: 1.35rem; }
+
     @media (max-width: 480px) {
       header {
         padding-top: 30px;
@@ -436,6 +450,7 @@
       .settings-panel-content { padding: 16px; }
       .settings-group { padding: 14px; }
       .settings-button-grid { grid-template-columns: 1fr; }
+      .manager-action-grid { grid-template-columns: 1fr; }
       .add-card { min-height: 205px; }
     }
 
@@ -1162,6 +1177,7 @@
           { label: "Rename", action: () => openRenameWebsiteModal(section.id, site.id) },
           { label: "Change Section", action: () => openMoveWebsiteModal(section.id, site.id) },
           { label: "Duplicate", action: () => duplicateWebsite(section.id, site.id) },
+          { label: "Export", action: () => openExportPayload({ format:"StreamHubWebsite", version:1, website:site }, (getWebsiteDisplayName(site)||"website").replace(/[^a-z0-9_-]+/gi,"-").toLowerCase()) },
           { label: "Delete", danger: true, action: () => openConfirmModal(
             "Delete website?",
             "Are you sure you want to delete “" + getWebsiteDisplayName(site) + "”? This cannot be undone.",
@@ -1251,8 +1267,11 @@
         title.addEventListener("contextmenu", event => {
           event.preventDefault();
           showContextMenu(event.clientX, event.clientY, [
+            { label: "↑ Move Up", action: () => moveSectionByOffset(section.id, -1) },
+            { label: "↓ Move Down", action: () => moveSectionByOffset(section.id, 1) },
             { label: "Edit", action: () => openEditSectionModal(section.id) },
             { label: "Rename", action: () => openRenameSectionModal(section.id) },
+            { label: "Export", action: () => openExportPayload({ format:"StreamHubSection", version:1, section }, (section.name||"section").replace(/[^a-z0-9_-]+/gi,"-").toLowerCase()) },
             { label: "Delete", danger: true, action: () => openConfirmModal(
               "Delete section?",
               "Are you sure you want to delete “" + ((section.name || "").trim() || "Untitled Section") + "”? This will also delete " + section.websites.length + " website(s) in it.",
@@ -1266,8 +1285,11 @@
             event.preventDefault();
             const rect = title.getBoundingClientRect();
             showContextMenu(rect.left + rect.width / 2, rect.bottom, [
+              { label: "↑ Move Up", action: () => moveSectionByOffset(section.id, -1) },
+              { label: "↓ Move Down", action: () => moveSectionByOffset(section.id, 1) },
               { label: "Edit", action: () => openEditSectionModal(section.id) },
               { label: "Rename", action: () => openRenameSectionModal(section.id) },
+              { label: "Export", action: () => openExportPayload({ format:"StreamHubSection", version:1, section }, (section.name||"section").replace(/[^a-z0-9_-]+/gi,"-").toLowerCase()) },
               { label: "Delete", danger: true, action: () => openConfirmModal(
                 "Delete section?", "Are you sure you want to delete this section and its " + section.websites.length + " website(s)?", "Delete Section",
                 () => { sections = sections.filter(item => item.id !== section.id); saveSections(); renderSections(); }
@@ -1378,6 +1400,40 @@
       renderSections();
     }
 
+    function moveSectionByOffset(sectionId, offset) {
+      const from = sections.findIndex(item => item.id === sectionId);
+      const to = from + offset;
+      if (from < 0 || to < 0 || to >= sections.length) return;
+      const [moving] = sections.splice(from, 1);
+      sections.splice(to, 0, moving);
+      saveSections(); renderSections();
+    }
+
+    function downloadTextFile(text, filename, mime = "application/json;charset=utf-8") {
+      const blob = new Blob([text], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1200);
+    }
+
+    function openExportPayload(payload, filenameBase) {
+      openModal("Export item", "Choose a plain JSON export or encrypt it with a password. Keep the password safe; it cannot be recovered.", `<div class="form-field"><label><input id="itemEncryptToggle" type="checkbox" style="width:auto;margin-right:8px">Encrypt with AES-GCM</label><small>AES-256-GCM with PBKDF2-SHA-256 key derivation (250,000 iterations).</small></div><div class="form-field"><label for="itemExportPassword">Encryption password</label><input id="itemExportPassword" type="password" autocomplete="new-password"></div>`, "Prepare Export", async () => {
+        let output=JSON.stringify(payload,null,2), filename=filenameBase+".json";
+        if(document.getElementById("itemEncryptToggle").checked){
+          const password=document.getElementById("itemExportPassword").value;
+          if(password.length<8) throw new Error("Use an encryption password with at least 8 characters.");
+          const enc=new TextEncoder(), salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+          const material=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveKey"]);
+          const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},material,{name:"AES-GCM",length:256},false,["encrypt"]);
+          const cipher=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,enc.encode(output)));
+          const packed=new Uint8Array(28+cipher.length);packed.set(salt);packed.set(iv,16);packed.set(cipher,28);
+          let binary="";packed.forEach(byte=>binary+=String.fromCharCode(byte));output="STREAMHUB-AESGCM:"+btoa(binary);filename=filenameBase+".encrypted.txt";
+        }
+        openExportTextModal("Your exported item", "Your export is ready. The full text is selected so you can copy it, or download it as a file.", output, filename);
+      });
+    }
+
     function showContextMenu(x, y, items) {
       contextMenu.replaceChildren();
       items.forEach(item => {
@@ -1403,23 +1459,27 @@
       modalForm.onsubmit = null;
     }
 
-    function openModal(title, intro, fieldsHTML, submitLabel, onSubmit, submitClass = "primary-button") {
+    function openModal(title, intro, fieldsHTML, submitLabel, onSubmit, submitClass = "primary-button", options = {}) {
       hideContextMenu();
+      modalOverlay.querySelector(".modal").classList.remove("manager-modal");
       modalTitle.textContent = title;
       modalIntro.textContent = intro || "";
       modalFields.innerHTML = fieldsHTML || "";
       modalActions.replaceChildren();
       modalError.textContent = "";
-      const cancel = document.createElement("button");
-      cancel.type = "button";
-      cancel.className = "secondary-button";
-      cancel.textContent = "Cancel";
-      cancel.addEventListener("click", closeModal);
+      if (options.cancelLabel !== null) {
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "secondary-button";
+        cancel.textContent = options.cancelLabel || "Cancel";
+        cancel.addEventListener("click", closeModal);
+        modalActions.appendChild(cancel);
+      }
       const submit = document.createElement("button");
       submit.type = "submit";
       submit.className = submitClass;
       submit.textContent = submitLabel;
-      modalActions.append(cancel, submit);
+      modalActions.appendChild(submit);
       modalOverlay.hidden = false;
       modalForm.onsubmit = async event => {
         event.preventDefault();
@@ -1455,6 +1515,38 @@
         if (!currentSection) throw new Error("That section no longer exists.");
         currentSection.websites.push({ id: makeId("website"), name, url, icon, emoji, description: document.getElementById("websiteDescription").value.trim() });
         saveSections(); renderSections(); closeModal();
+      });
+      addImportAction("Import Website", "website", () => openImportItemModal("Website", data => {
+        const item = data && data.format === "StreamHubWebsite" ? data.website : data;
+        if (!item || !item.url) throw new Error("The file does not contain a valid website export.");
+        const target=findSection(sectionId); if(!target) throw new Error("Section not found.");
+        const imported=normaliseSections([{name:"temporary",websites:[item]}])[0].websites[0];
+        imported.id=makeId("website"); target.websites.push(imported);
+      }));
+    }
+
+    // Import an individual website from a StreamHubWebsite JSON object or encrypted package.
+    function addImportAction(label, format, onImport) {
+      const b = document.createElement("button"); b.type="button"; b.className="secondary-button"; b.textContent=label;
+      b.addEventListener("click", onImport); modalActions.insertBefore(b, modalActions.lastElementChild);
+    }
+    async function decodeImportedText(text, password) {
+      const trimmed = String(text || "").trim();
+      if (trimmed.startsWith("STREAMHUB-AESGCM:")) {
+        if (!password) throw new Error("Enter the export password.");
+        const raw = Uint8Array.from(atob(trimmed.slice(17)), c => c.charCodeAt(0));
+        const salt=raw.slice(0,16), iv=raw.slice(16,28), cipher=raw.slice(28);
+        const material=await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+        const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},material,{name:"AES-GCM",length:256},false,["decrypt"]);
+        const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,cipher);
+        return JSON.parse(new TextDecoder().decode(plain));
+      }
+      return JSON.parse(trimmed);
+    }
+    function openImportItemModal(kind, onDone) {
+      openModal("Import " + kind, "Paste a StreamHub JSON export. Encrypted exports begin with STREAMHUB-AESGCM: and require their password.", `<div class="form-field"><label for="itemImportText">JSON or encrypted export text</label><textarea id="itemImportText" rows="9" spellcheck="false"></textarea></div><div class="form-field"><label for="itemImportPassword">Password (encrypted exports only)</label><input id="itemImportPassword" type="password" autocomplete="off"></div>`, "Import " + kind, async () => {
+        const data=await decodeImportedText(document.getElementById("itemImportText").value,document.getElementById("itemImportPassword").value);
+        await onDone(data); closeModal(); saveSections(); renderSections();
       });
     }
 
@@ -1563,6 +1655,12 @@
         sections.push({ id: makeId("section"), name, icon, description: document.getElementById("newSectionDescription").value.trim(), websites: [] });
         saveSections(); renderSections(); closeModal();
       });
+      addImportAction("Import Section", "section", () => openImportItemModal("Section", data => {
+        const item=data && data.format === "StreamHubSection" ? data.section : data;
+        if(!item || !Array.isArray(item.websites)) throw new Error("The file does not contain a valid section export.");
+        const imported=normaliseSections([item])[0]; imported.id=makeId("section");
+        imported.websites.forEach(site => site.id=makeId("website")); sections.push(imported);
+      }));
     }
 
     function openEditSectionModal(sectionId) {
@@ -1655,10 +1753,21 @@
     }
 
     function openTextModal(title, intro, initialText, submitLabel, handler) {
-      openModal(title, intro, `<div class="form-field"><label for="transferText">StreamHub backup (JSON)</label><textarea id="transferText" rows="12" spellcheck="false" style="font-family:monospace" placeholder="Paste the full StreamHub JSON backup here"></textarea></div>`, submitLabel, handler);
+      // Import-only dialog: file picker and password are intentionally kept out of export dialogs.
+      openModal(title, intro, `<div class="form-field"><label for="transferFile">Choose a JSON or encrypted text file (optional)</label><input id="transferFile" type="file" accept=".json,.txt,application/json,text/plain"></div><div class="form-field"><label for="transferText">JSON or encrypted backup text</label><textarea id="transferText" rows="12" spellcheck="false" style="font-family:monospace" placeholder="Paste the full StreamHub export here"></textarea></div><div class="form-field"><label for="transferPassword">Password (encrypted exports only)</label><input id="transferPassword" type="password" autocomplete="off"></div>`, submitLabel, handler);
+      document.getElementById("transferFile").addEventListener("change", async e => { const f=e.target.files[0]; if(f) document.getElementById("transferText").value=await f.text(); });
       document.getElementById("transferText").value = initialText || "";
       document.getElementById("transferText").focus();
       document.getElementById("transferText").select();
+    }
+
+    function openExportTextModal(title, intro, exportText, filename) {
+      openModal(title, intro, `<div class="form-field export-output-field"><label for="exportOutputText">Export text</label><textarea id="exportOutputText" rows="14" spellcheck="false" readonly aria-label="Generated export text"></textarea><small>Everything is selected. Press Ctrl+C to copy, or use Download.</small></div>`, "Close", () => closeModal(), "primary-button", { cancelLabel: null });
+      const output = document.getElementById("exportOutputText");
+      output.value = exportText;
+      addJsonDownloadButton(exportText, filename);
+      // Select the complete export after the new output dialog has been rendered.
+      setTimeout(() => { output.focus(); output.select(); output.setSelectionRange(0, output.value.length); }, 0);
     }
     const settingsOverlay = document.getElementById("settingsOverlay");
     const settingsButton = document.getElementById("settingsButton");
@@ -1690,10 +1799,11 @@
       const button = document.createElement("button");
       button.type = "button";
       button.className = "secondary-button";
-      button.textContent = "Download .json";
-      button.setAttribute("aria-label", "Download StreamHub backup as a JSON file");
+      const encryptedText = /\.encrypted\.txt$/i.test(filename);
+      button.textContent = encryptedText ? "Download encrypted .txt" : "Download .json";
+      button.setAttribute("aria-label", encryptedText ? "Download encrypted StreamHub export as a text file" : "Download StreamHub backup as a JSON file");
       button.addEventListener("click", () => {
-        const blob = new Blob([jsonText], { type: "application/json;charset=utf-8" });
+        const blob = new Blob([jsonText], { type: encryptedText ? "text/plain;charset=utf-8" : "application/json;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
@@ -1704,7 +1814,7 @@
         link.remove();
         window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       });
-      // Keep Download beside the modal's Cancel/Done actions, not inside the JSON text.
+      // Keep Download beside the modal actions, not inside the export text.
       const lastAction = modalActions.lastElementChild;
       modalActions.insertBefore(button, lastAction || null);
     }
@@ -1753,18 +1863,28 @@
       });
     });
     document.getElementById("exportButton").addEventListener("click", () => {
-      openModal("Export StreamHub", "Choose whether to back up only the current layout or every layout. The export contains your website links, order, icons, descriptions, and section settings.", `<div class="form-field"><label for="exportScope">Export scope</label><select id="exportScope"><option value="current">Current save only</option><option value="all">Everything (all saves)</option></select></div>`, "Generate Export", () => {
+      openModal("Export StreamHub", "Choose whether to back up only the current layout or every layout. The export contains your website links, order, icons, descriptions, and section settings.", `<div class="form-field"><label for="exportScope">Export scope</label><select id="exportScope"><option value="current">Current save only</option><option value="all">Everything (all saves)</option></select></div><div class="form-field"><label><input id="encryptExportToggle" type="checkbox" style="width:auto;margin-right:8px">Encrypt this export with AES-GCM</label><small>Uses AES-256-GCM with a PBKDF2-SHA-256 derived key (250,000 iterations). The password is required to import it.</small></div><div class="form-field"><label for="exportPassword">Encryption password</label><input id="exportPassword" type="password" autocomplete="new-password" placeholder="Choose a strong password"></div>`, "Generate Export", async () => {
         const scope = document.getElementById("exportScope").value;
         const data = scope === "all" ? saveEverythingExport() : { format:"StreamHubExport", version:1, exportedAt:new Date().toISOString(), save: { id:activeSaveId, name:(saveStore.saves.find(save=>save.id===activeSaveId)||{}).name || "Imported Save", sections } };
-        const jsonText = JSON.stringify(data, null, 2);
-        const exportName = scope === "all" ? "streamhub-all-saves.json" : ((saveStore.saves.find(save => save.id === activeSaveId)?.name || "streamhub-save").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "streamhub-save") + ".json";
-        openTextModal("Your StreamHub Backup", "Copy the JSON below or download it as a .json file. Keep the backup somewhere safe so you can restore it later.", jsonText, "Done", () => closeModal());
-        addJsonDownloadButton(jsonText, exportName);
+        let jsonText = JSON.stringify(data, null, 2);
+        let exportName = scope === "all" ? "streamhub-all-saves.json" : ((saveStore.saves.find(save => save.id === activeSaveId)?.name || "streamhub-save").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "") || "streamhub-save") + ".json";
+        if (document.getElementById("encryptExportToggle").checked) {
+          const password=document.getElementById("exportPassword").value;
+          if(password.length < 8) throw new Error("Use an encryption password with at least 8 characters.");
+          const enc=new TextEncoder(), salt=crypto.getRandomValues(new Uint8Array(16)), iv=crypto.getRandomValues(new Uint8Array(12));
+          const material=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveKey"]);
+          const key=await crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},material,{name:"AES-GCM",length:256},false,["encrypt"]);
+          const cipher=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,enc.encode(jsonText)));
+          const packed=new Uint8Array(salt.length+iv.length+cipher.length); packed.set(salt);packed.set(iv,16);packed.set(cipher,28);
+          let binary=""; packed.forEach(byte=>binary+=String.fromCharCode(byte)); jsonText="STREAMHUB-AESGCM:"+btoa(binary);
+          exportName=exportName.replace(/\.json$/i,"")+".encrypted.txt";
+        }
+        openExportTextModal("Your StreamHub Backup", "Your backup is ready. The full text is selected for copying. Keep your encryption password safe; encrypted backups cannot be recovered without it.", jsonText, exportName);
       });
     });
     document.getElementById("importButton").addEventListener("click", () => {
-      openTextModal("Import a StreamHub Backup", "Paste the complete JSON text from a StreamHub export. A single-save backup is added as a new layout; an all-saves backup replaces your current collection. Invalid or incomplete data will be rejected.", "", "Import Backup", () => {
-        let data; try { data = JSON.parse(document.getElementById("transferText").value); } catch (_) { throw new Error("That is not valid JSON. Paste the full export text."); }
+      openTextModal("Import a StreamHub Backup", "Choose a .json file or paste JSON/encrypted text. Encrypted exports require the password used when exporting.", "", "Import Backup", async () => {
+        let data; try { data = await decodeImportedText(document.getElementById("transferText").value, document.getElementById("transferPassword").value); } catch (error) { throw new Error(error.message || "That is not valid JSON or a valid encrypted export."); }
         if (!data || data.format !== "StreamHubExport" || data.version !== 1) throw new Error("This does not look like a supported StreamHub export.");
         if (Array.isArray(data.saves)) {
           if (!data.saves.length) throw new Error("This backup does not contain any saves.");
@@ -1833,6 +1953,56 @@
       if (!contextMenu.hidden && !contextMenu.contains(event.target)) hideContextMenu();
     });
     document.addEventListener("keydown", event => {
+      if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        openModal("StreamHub Manager", "Enter the manager code to open the management tools.", `<div class="form-field"><label for="quickManagerCode">Manager code</label><input id="quickManagerCode" type="password" inputmode="numeric" autocomplete="off" placeholder="Enter manager code"></div>`, "Open Manager", () => {
+          if (document.getElementById("quickManagerCode").value !== "200565") throw new Error("Incorrect code.");
+          const dashboard = `
+            <div class="manager-dashboard">
+              <section class="manager-group">
+                <h3>Build your layout</h3>
+                <div class="manager-action-grid" id="managerLayoutActions"></div>
+              </section>
+              <section class="manager-group">
+                <h3>Saves &amp; backups</h3>
+                <div class="manager-action-grid" id="managerSaveActions"></div>
+              </section>
+              <section class="manager-group">
+                <h3>Import individual items</h3>
+                <div class="manager-action-grid" id="managerItemActions"></div>
+              </section>
+            </div>`;
+          openModal("StreamHub Manager", "Manage websites, sections, and saved layouts from one place.", dashboard, "Close", () => closeModal(), "primary-button", { cancelLabel: null });
+          modalOverlay.querySelector(".modal").classList.add("manager-modal");
+          const groups = {
+            managerLayoutActions: [
+              ["＋", "Add Website", "Create a new website shortcut.", () => { closeModal(); if (sections[0]) openAddWebsiteModal(sections[0].id); else openAddSectionModal(); }],
+              ["▦", "Add Section", "Create a new group for your shortcuts.", () => { closeModal(); openAddSectionModal(); }]
+            ],
+            managerSaveActions: [
+              ["＋", "Create Save", "Start a separate website and section layout.", () => { closeModal(); document.getElementById("newSaveButton").click(); }],
+              ["⇩", "Import Saves", "Restore a StreamHub backup from JSON or encrypted text.", () => { closeModal(); document.getElementById("importButton").click(); }],
+              ["⇧", "Export Saves", "Download or copy one save or every save.", () => { closeModal(); document.getElementById("exportButton").click(); }]
+            ],
+            managerItemActions: [
+              ["↳", "Import Website", "Add a website from JSON or encrypted text.", () => { closeModal(); if (sections[0]) openAddWebsiteModal(sections[0].id); else openAddSectionModal(); }],
+              ["↳", "Import Section", "Add a section and its websites from an export.", () => { closeModal(); openAddSectionModal(); }]
+            ]
+          };
+          Object.entries(groups).forEach(([containerId, items]) => {
+            const container = document.getElementById(containerId);
+            items.forEach(([symbol, label, description, action]) => {
+              const button = document.createElement("button");
+              button.type = "button";
+              button.className = "manager-action-tile";
+              button.innerHTML = `<span class="manager-action-symbol" aria-hidden="true">${symbol}</span><span class="manager-action-copy"><strong>${label}</strong><small>${description}</small></span><span class="manager-action-chevron" aria-hidden="true">›</span>`;
+              button.addEventListener("click", action);
+              container.appendChild(button);
+            });
+          });
+        });
+        return;
+      }
       if (event.key === "Escape") {
         hideContextMenu();
         if (!modalOverlay.hidden) closeModal();
